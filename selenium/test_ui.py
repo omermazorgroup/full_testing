@@ -3,6 +3,13 @@ import selenium
 import pytest
 import unittest
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from webdriver_manager.firefox import GeckoDriverManager
+from selenium.webdriver.edge.service import Service as EdgeService
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+# from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options
 from final_project.selenium.page_models.loginPage import LoginPage
 from final_project.selenium.page_models.storePage import StorePage
@@ -27,14 +34,6 @@ mylogger = logging.getLogger()
 
 
 
-def enter_main_page(url) -> BasicPage:
-    """
-    A function that go to main page
-    """
-    driver = webdriver.Chrome(chrom_driver_path, chrome_options=chrome_options)
-    driver.maximize_window()
-    driver.get(url)
-    return BasicPage(driver)
 
 
 def enter_store_page(page):
@@ -42,37 +41,6 @@ def enter_store_page(page):
     A function that go to store page
     """
     return StorePage(page.click_store_link())
-
-
-def open_login_page_and_submit(url, email: str, password: str):
-    """
-    A function that enter login page and submit the login form by two inputs which sent as parameters
-    :param email: str, email input
-    :param password: str, password input
-    """
-    main_page = enter_main_page(url)
-    login_page = LoginPage(main_page.driver)
-    login_page.fill_email_input(email)
-    login_page.fill_password_input(password)
-    next_page = StorePage(login_page.click_sign_in())
-    time.sleep(2)
-    return next_page
-
-
-def open_register_page_and_submit(url, email: str, password: str, firstname: str, lastname: str):
-    """
-    A function that enter to register page and submit the register form
-    by register inputs which sent as parameters
-    """
-    main_page = enter_main_page(url)
-    login_page = LoginPage(main_page.driver)
-    register_page = RegisterPage(login_page.click_register_button())
-    register_page.fill_email_input(email)
-    register_page.fill_password_input(password)
-    register_page.fill_firstname_input(firstname)
-    register_page.fill_lastname_input(lastname)
-    register_page.click_sign_up()
-    return register_page
 
 
 def enter_authors_page(page):
@@ -95,9 +63,55 @@ def enter_search_page(page, text):
 
 @pytest.mark.usefixtures("driver_class")
 class Tests(unittest.TestCase):
+
+    def enter_main_page(self) -> BasicPage:
+        """
+        A function that go to main page
+        """
+        if self.driver.browser == 'firefox':
+            driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()))
+        elif self.driver.browser == 'edge':
+            driver = webdriver.Edge(service=EdgeService(EdgeChromiumDriverManager().install()))
+        else:
+            driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+        # if self.driver.browser
+        # driver = webdriver.Chrome(chrom_driver_path, chrome_options=chrome_options)
+        driver.maximize_window()
+        driver.get(self.driver.url)
+        return BasicPage(driver)
+
+    def open_login_page_and_submit(self, email: str, password: str):
+        """
+        A function that enter login page and submit the login form by two inputs which sent as parameters
+        :param email: str, email input
+        :param password: str, password input
+        """
+        main_page = self.enter_main_page()
+        login_page = LoginPage(main_page.driver)
+        login_page.fill_email_input(email)
+        login_page.fill_password_input(password)
+        next_page = StorePage(login_page.click_sign_in())
+        time.sleep(2)
+        return next_page
+
+    def open_register_page_and_submit(self, email: str, password: str, firstname: str, lastname: str):
+        """
+        A function that enter to register page and submit the register form
+        by register inputs which sent as parameters
+        """
+        main_page = self.enter_main_page()
+        login_page = LoginPage(main_page.driver)
+        register_page = RegisterPage(login_page.click_register_button())
+        register_page.fill_email_input(email)
+        register_page.fill_password_input(password)
+        register_page.fill_firstname_input(firstname)
+        register_page.fill_lastname_input(lastname)
+        register_page.click_sign_up()
+        return register_page
+
     def test_links(self):
         mylogger.info("test for the main links")
-        main_page = enter_main_page(self.driver.url)
+        main_page = self.enter_main_page()
         store_page = StorePage(main_page.click_store_link())
         assert store_page.url() == "http://localhost/store"
         authors_page = AuthorsPage(main_page.click_authors_link())
@@ -110,105 +124,105 @@ class Tests(unittest.TestCase):
 
     def test_register_empty_email(self):
         mylogger.info("test for register with empty email input")
-        register_page = open_register_page_and_submit(self.driver.url, "", self.driver.unregister_user["password"], "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit( "", self.driver.unregister_user["password"], "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
         register_page.close_page()
 
     def test_register_invalid_email(self):
         mylogger.info("test for register with invalid email input")
-        register_page = open_register_page_and_submit(self.driver.url, "admin@", self.driver.unregister_user["password"], "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit("admin@", self.driver.unregister_user["password"], "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
         register_page.close_page()
 
     def test_register_shorter_password(self):
         mylogger.info("test for register with password input shorter than allowed")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], "123", "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], "123", "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
         register_page.close_page()
 
     def test_register_longer_password(self):
         mylogger.info("test for register with password input longer than allowed")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], "12345678910111213", "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], "12345678910111213", "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
         register_page.close_page()
 
     def test_register_empty_password(self):
         mylogger.info("test for register with empty password input")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], "", "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], "", "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
         register_page.close_page()
 
     def test_register_empty_firstname(self):
         mylogger.info("test for register with empty firstname input")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], self.driver.unregister_user["password"], "", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], self.driver.unregister_user["password"], "", "Mazor")
         assert register_page.url() == "http://localhost/register"
         register_page.close_page()
 
     def test_register_empty_lastname(self):
         mylogger.info("test for register with empty lastname input")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], self.driver.unregister_user["password"], "Omer", "")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], self.driver.unregister_user["password"], "Omer", "")
         assert register_page.url() == "http://localhost/register"
         register_page.close_page()
 
     def test_register_registered_email(self):
         mylogger.info("test for register with registered user")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.register_user["email"], "24531", "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.register_user["email"], "24531", "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
         register_page.close_page()
 
     @pytest.mark.skip(reason="No details about what happen after valid registration")
     def test_register_valid(self):
         mylogger.info("test for valid registration")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], self.driver.unregister_user["password"], "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], self.driver.unregister_user["password"], "Omer", "Mazor")
         assert register_page.url() == "http://localhost/store"
         register_page.close_page()
 
 
     def test_login_empty_email(self):
         mylogger.info("test for login with empty email input")
-        next_page = open_login_page_and_submit(self.driver.url, "", self.driver.register_user["password"])
+        next_page = self.open_login_page_and_submit("", self.driver.register_user["password"])
         assert next_page.url() == "http://localhost/"
         next_page.close_page()
 
     def test_login_invalid_email(self):
         mylogger.info("test for login with invalid email input")
-        next_page = open_login_page_and_submit(self.driver.url, "admin@", self.driver.register_user["password"])
+        next_page = self.open_login_page_and_submit("admin@", self.driver.register_user["password"])
         assert next_page.url() == "http://localhost/"
         next_page.close_page()
 
     def test_login_empty_password(self):
         mylogger.info("test for login with empty password input")
-        next_page = open_login_page_and_submit(self.driver.url, self.driver.register_user["email"], "")
+        next_page = self.open_login_page_and_submit(self.driver.register_user["email"], "")
         assert next_page.url() == "http://localhost/"
         next_page.close_page()
 
     def test_login_shorter_password(self):
         mylogger.info("test for login with empty password input")
-        next_page = open_login_page_and_submit(self.driver.url, self.driver.register_user["email"], "123")
+        next_page = self.open_login_page_and_submit(self.driver.register_user["email"], "123")
         assert next_page.url() == "http://localhost/"
         next_page.close_page()
 
     def test_login_longer_password(self):
         mylogger.info("test for login with empty password input")
-        next_page = open_login_page_and_submit(self.driver.url, self.driver.register_user["email"], "12345678901011121314")
+        next_page = self.open_login_page_and_submit(self.driver.register_user["email"], "12345678901011121314")
         assert next_page.url() == "http://localhost/"
         next_page.close_page()
 
     def test_login_unregistered_user(self):
         mylogger.info("test for login with unregistered user")
-        next_page = open_login_page_and_submit(self.driver.url, self.driver.unregister_user["email"], self.driver.unregister_user["password"])
+        next_page = self.open_login_page_and_submit(self.driver.unregister_user["email"], self.driver.unregister_user["password"])
         assert next_page.url() == "http://localhost/"
         next_page.close_page()
 
     def test_login_registered_user(self):
         mylogger.info("test for login with registered user")
-        next_page = open_login_page_and_submit(self.driver.url, self.driver.register_user["email"], self.driver.register_user["password"])
+        next_page = self.open_login_page_and_submit(self.driver.register_user["email"], self.driver.register_user["password"])
         assert next_page.url() == "http://localhost/store"
         next_page.close_page()
 
     def test_buy_book_without_login(self):
         mylogger.info("test for buy book without login")
-        main_page = enter_main_page(self.driver.url)
+        main_page = self.enter_main_page()
         store_page = enter_store_page(main_page)
         books = store_page.books_of_the_store()
         store_page.buy_book(random.randint(0, len(books)-1))
@@ -217,7 +231,7 @@ class Tests(unittest.TestCase):
 
     def test_buy_book_with_login(self):
         mylogger.info("test for buy book with login")
-        store_page = open_login_page_and_submit(self.driver.url, self.driver.register_user["email"], self.driver.register_user["password"])
+        store_page = self.open_login_page_and_submit(self.driver.register_user["email"], self.driver.register_user["password"])
         books = store_page.books_of_the_store()
         time.sleep(3)
         for num in range(len(books)):
@@ -233,7 +247,7 @@ class Tests(unittest.TestCase):
 
     def test_buy_book_zero_amount(self):
         mylogger.info("test for buy book with 0 amount")
-        store_page = open_login_page_and_submit(self.driver.url, self.driver.register_user["email"], self.driver.register_user["password"])
+        store_page = self.open_login_page_and_submit(self.driver.register_user["email"], self.driver.register_user["password"])
         books = store_page.books_of_the_store()
         for num in range(len(books)):
             if store_page.book_amount(num) == 0:
@@ -246,7 +260,7 @@ class Tests(unittest.TestCase):
 
     def test_logout(self):
         mylogger.info("test for logout the user")
-        store_page = open_login_page_and_submit(self.driver.url, self.driver.register_user["email"], self.driver.register_user["password"])
+        store_page = self.open_login_page_and_submit(self.driver.register_user["email"], self.driver.register_user["password"])
         store_page.click_logout_button()
         books = store_page.books_of_the_store()
         store_page.buy_book(random.randint(0, len(books)-1))
@@ -255,7 +269,7 @@ class Tests(unittest.TestCase):
 
     def test_link_to_author_page(self):
         mylogger.info("test for enter to some author page from store page")
-        main_page = enter_main_page(self.driver.url)
+        main_page = self.enter_main_page()
         authors_page = enter_authors_page(main_page)
         authors = authors_page.authors_of_the_store()
         author = random.randint(0, len(authors)-1)
@@ -266,7 +280,7 @@ class Tests(unittest.TestCase):
 
     def test_books_of_author_in_author_page(self):
         mylogger.info("test for books in some author page")
-        main_page = enter_main_page(self.driver.url)
+        main_page = self.enter_main_page()
         authors_page = enter_authors_page(main_page)
         authors = authors_page.authors_of_the_store()
         author = random.randint(0, len(authors)-1)
@@ -279,7 +293,7 @@ class Tests(unittest.TestCase):
 
     def test_valid_amount_author_books(self):
         mylogger.info("test for valid amount of books in some author page")
-        main_page = enter_main_page(self.driver.url)
+        main_page = self.enter_main_page()
         authors_page = enter_authors_page(main_page)
         authors = authors_page.authors_of_the_store()
         author = random.randint(0, len(authors)-1)
@@ -293,7 +307,7 @@ class Tests(unittest.TestCase):
 
     def test_empty_search_input(self):
         mylogger.info("test for search with empty search input")
-        main_page = enter_main_page(self.driver.url)
+        main_page = self.enter_main_page()
         search_page = enter_search_page(main_page, "")
         WebDriverWait(search_page.driver, 3).until(EC.presence_of_element_located((By.CLASS_NAME, "card-group")))
         search_results = search_page.search_results()
@@ -304,7 +318,7 @@ class Tests(unittest.TestCase):
 
     def test_book_search(self):
         mylogger.info("test for search for some book")
-        main_page = enter_main_page(self.driver.url)
+        main_page = self.enter_main_page()
         store_page = enter_store_page(main_page)
         books = store_page.books_of_the_store()
         book = random.randint(0, len(books)-1)
@@ -318,7 +332,7 @@ class Tests(unittest.TestCase):
 
     def test_author_search(self):
         mylogger.info("test for search for some author")
-        main_page = enter_main_page(self.driver.url)
+        main_page = self.enter_main_page()
         authors_page = enter_authors_page(main_page)
         authors = authors_page.authors_of_the_store()
         author = random.randint(0, len(authors) - 1)
@@ -332,7 +346,7 @@ class Tests(unittest.TestCase):
 
     def test_fake_book_search(self):
         mylogger.info("test for search for some book that not exists in the system")
-        main_page = enter_main_page(self.driver.url)
+        main_page = self.enter_main_page()
         store_page = StorePage(main_page.click_store_link())
         books = store_page.books_of_the_store()
         WebDriverWait(main_page.driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "book-container")))
@@ -348,7 +362,7 @@ class Tests(unittest.TestCase):
 
     def test_fake_author_search(self):
         mylogger.info("test for search for some author that not exists in the system")
-        main_page = enter_main_page(self.driver.url)
+        main_page = self.enter_main_page()
         authors_page = enter_authors_page(main_page)
         authors = authors_page.authors_of_the_store()
         WebDriverWait(authors_page.driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "author-container")))
@@ -365,5 +379,4 @@ class Tests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
 
