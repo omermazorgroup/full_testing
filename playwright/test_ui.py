@@ -24,27 +24,14 @@ mylogger = logging.getLogger()
 # mylogger.info(sys.argv[4])
 
 
-# @pytest.fixture
-# def register_user():
-#     return {
-#       "email": "admin@sela.co.il",
-#       "password": "12345"
-#     }
-
-
-# @pytest.fixture
-# def unregister_user():
-#     return {
-#       "email": "omer@sela.co.il",
-#       "password": "35124"
-#     }
-
-
-def enter_main_page(playwright, url) -> BasicPage:
+def enter_main_page(playwright, url, browser) -> BasicPage:
     """
     A function that go to main page
     """
-    browser = playwright.chromium.launch(headless=False)
+    if browser == "firefox":
+        browser = playwright.firefox.launch(headless=False)
+    else:
+        browser = playwright.chromium.launch(headless=False)
     context = browser.new_context()
     page = context.new_page()
     page.goto(url)
@@ -57,39 +44,6 @@ def enter_store_page(page):
     A function that go to store page
     """
     return StorePage(page.click_store_link())
-
-
-def open_login_page_and_submit(playwright, url, email: str, password: str):
-    """
-    A function that enter login page and submit the login form by two inputs which sent as parameters
-    :param email: str, email input
-    :param password: str, password input
-    """
-    main_page = enter_main_page(playwright, url)
-    login_page = LoginPage(main_page.page)
-    login_page.fill_email_input(email)
-    login_page.fill_password_input(password)
-    next_page = StorePage(login_page.click_sign_in())
-    next_page.page.wait_for_timeout(2000)
-    return next_page
-
-
-def open_register_page_and_submit(url, email: str, password: str, firstname: str, lastname: str):
-    """
-    A function that enter to register page and submit the register form
-    by register inputs which sent as parameters
-    """
-    with sync_playwright() as playwright:
-        main_page = enter_main_page(playwright, url)
-        login_page = LoginPage(main_page.page)
-        register_page = RegisterPage(login_page.click_register_button())
-        register_page.fill_email_input(email)
-        register_page.fill_password_input(password)
-        register_page.fill_firstname_input(firstname)
-        register_page.fill_lastname_input(lastname)
-        register_page.click_sign_up()
-        register_page.page.wait_for_timeout(2000)
-        return register_page
 
 
 def enter_authors_page(page):
@@ -120,16 +74,6 @@ def message_after_purchase(dialog, text: str):
     assert text in dialog.message
 
 
-@pytest.fixture(scope="session")
-def url(pytestconfig) -> str:
-    """
-    give the url from pytest options
-    :param pytestconfig: pytestconfig fixture
-    :return: url to integrate
-    """
-    return f'{pytestconfig.getoption("url")}/'
-
-
 @pytest.mark.usefixtures("driver_class")
 class Tests(unittest.TestCase):
     # def __int__(self):
@@ -142,12 +86,49 @@ class Tests(unittest.TestCase):
         """
         A function that go to main page
         """
-        browser = playwright.chromium.launch(headless=False)
+        # browser = playwright.chromium.launch(headless=False)
+        if self.driver.browser == "firefox":
+            browser = playwright.firefox.launch(headless=False)
+        elif self.driver.browser == "webkit":
+            browser = playwright.webkit.launch(headless=False)
+        else:
+            browser = playwright.chromium.launch(headless=False)
         context = browser.new_context()
         page = context.new_page()
         page.goto(self.driver.url)
         page.on('dialog', lambda dialog: dialog.accept())
         return BasicPage(page)
+
+    def open_login_page_and_submit(self, playwright, email: str, password: str):
+        """
+        A function that enter login page and submit the login form by two inputs which sent as parameters
+        :param email: str, email input
+        :param password: str, password input
+        """
+        main_page = self.enter_main_page(playwright)
+        login_page = LoginPage(main_page.page)
+        login_page.fill_email_input(email)
+        login_page.fill_password_input(password)
+        next_page = StorePage(login_page.click_sign_in())
+        next_page.page.wait_for_timeout(2000)
+        return next_page
+
+    def open_register_page_and_submit(self, email: str, password: str, firstname: str, lastname: str):
+        """
+        A function that enter to register page and submit the register form
+        by register inputs which sent as parameters
+        """
+        with sync_playwright() as playwright:
+            main_page = self.enter_main_page(playwright)
+            login_page = LoginPage(main_page.page)
+            register_page = RegisterPage(login_page.click_register_button())
+            register_page.fill_email_input(email)
+            register_page.fill_password_input(password)
+            register_page.fill_firstname_input(firstname)
+            register_page.fill_lastname_input(lastname)
+            register_page.click_sign_up()
+            register_page.page.wait_for_timeout(2000)
+            return register_page
 
     def test_links(self):
         mylogger.info("test for the main links")
@@ -162,84 +143,84 @@ class Tests(unittest.TestCase):
 
     def test_register_empty_email(self):
         mylogger.info("test for register with empty email input")
-        register_page = open_register_page_and_submit(self.driver.url, "", self.driver.unregister_user["password"], "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit("", self.driver.unregister_user["password"], "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
 
     def test_register_invalid_email(self):
         mylogger.info("test for register with invalid email input")
-        register_page = open_register_page_and_submit(self.driver.url, "admin@", self.driver.unregister_user["password"], "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit("admin@", self.driver.unregister_user["password"], "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
 
     def test_register_shorter_password(self):
         mylogger.info("test for register with password input shorter than allowed")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], "123", "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], "123", "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
 
     def test_register_longer_password(self):
         mylogger.info("test for register with password input longer than allowed")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], "12345678910111213", "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], "12345678910111213", "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
 
     def test_register_empty_password(self):
         mylogger.info("test for register with empty password input")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], "", "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], "", "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
 
     def test_register_empty_firstname(self):
         mylogger.info("test for register with empty firstname input")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], self.driver.unregister_user["password"], "", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], self.driver.unregister_user["password"], "", "Mazor")
         assert register_page.url() == "http://localhost/register"
 
     def test_register_empty_lastname(self):
         mylogger.info("test for register with empty lastname input")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], self.driver.unregister_user["password"], "Omer", "")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], self.driver.unregister_user["password"], "Omer", "")
         assert register_page.url() == "http://localhost/register"
 
     def test_register_registered_email(self):
         mylogger.info("test for register with registered user")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.register_user["email"], "24531", "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.register_user["email"], "24531", "Omer", "Mazor")
         assert register_page.url() == "http://localhost/register"
 
     @pytest.mark.skip(reason="No details about what happen after valid registration")
     def test_register_valid(self):
         mylogger.info("test for valid registration")
-        register_page = open_register_page_and_submit(self.driver.url, self.driver.unregister_user["email"], self.driver.unregister_user["password"], "Omer", "Mazor")
+        register_page = self.open_register_page_and_submit(self.driver.unregister_user["email"], self.driver.unregister_user["password"], "Omer", "Mazor")
         assert register_page.url() == "http://localhost/store"
 
     def test_login_empty_email(self):
         mylogger.info("test for login with empty email input")
         with sync_playwright() as playwright:
-            next_page = open_login_page_and_submit(playwright, self.driver.url, "", self.driver.register_user["password"])
+            next_page = self.open_login_page_and_submit(playwright, "", self.driver.register_user["password"])
             assert next_page.url() == "http://localhost/"
 
     def test_login_invalid_email(self):
         mylogger.info("test for login with invalid email input")
         with sync_playwright() as playwright:
-            next_page = open_login_page_and_submit(playwright, self.driver.url, "admin@", self.driver.register_user["password"])
+            next_page = self.open_login_page_and_submit(playwright, "admin@", self.driver.register_user["password"])
             assert next_page.url() == "http://localhost/"
 
     def test_login_empty_password(self):
         mylogger.info("test for login with empty password input")
         with sync_playwright() as playwright:
-            next_page = open_login_page_and_submit(playwright, self.driver.url, self.driver.register_user["email"], "")
+            next_page = self.open_login_page_and_submit(playwright, self.driver.register_user["email"], "")
             assert next_page.url() == "http://localhost/"
 
     def test_login_unregistered_user(self):
         mylogger.info("test for login with unregistered user")
         with sync_playwright() as playwright:
-            next_page = open_login_page_and_submit(playwright, self.driver.url, self.driver.unregister_user["email"], self.driver.unregister_user["password"])
+            next_page = self.open_login_page_and_submit(playwright, self.driver.unregister_user["email"], self.driver.unregister_user["password"])
             assert next_page.url() == "http://localhost/"
 
     def test_login_registered_user(self):
         mylogger.info("test for login with registered user")
         with sync_playwright() as playwright:
-            next_page = open_login_page_and_submit(playwright, self.driver.url, self.driver.register_user["email"], self.driver.register_user["password"])
+            next_page = self.open_login_page_and_submit(playwright, self.driver.register_user["email"], self.driver.register_user["password"])
             assert next_page.url() == "http://localhost/store"
 
     def test_buy_book_without_login(self):
         mylogger.info("test for buy book without login")
         with sync_playwright() as playwright:
-            main_page = enter_main_page(playwright, self.driver.url)
+            main_page = self.enter_main_page(playwright)
             store_page = enter_store_page(main_page)
             store_page.page.wait_for_selector('.book-container')
             books = store_page.books_of_the_store()
@@ -249,7 +230,7 @@ class Tests(unittest.TestCase):
     def test_buy_book_with_login(self):
         mylogger.info("test for buy book with login")
         with sync_playwright() as playwright:
-            store_page = open_login_page_and_submit(playwright, self.driver.url, self.driver.register_user["email"], self.driver.register_user["password"])
+            store_page = self.open_login_page_and_submit(playwright, self.driver.register_user["email"], self.driver.register_user["password"])
             books = store_page.books_of_the_store()
             for num in range(books.count()):
                 if store_page.book_amount(num) > 0:
@@ -265,7 +246,7 @@ class Tests(unittest.TestCase):
     def test_buy_book_zero_amount(self):
         mylogger.info("test for buy book with 0 amount")
         with sync_playwright() as playwright:
-            store_page = open_login_page_and_submit(playwright, self.driver.url, self.driver.register_user["email"], self.driver.register_user["password"])
+            store_page = self.open_login_page_and_submit(playwright, self.driver.register_user["email"], self.driver.register_user["password"])
             books = store_page.books_of_the_store()
             for num in range(books.count()):
                 if store_page.book_amount(num) == 0:
@@ -279,7 +260,7 @@ class Tests(unittest.TestCase):
     def test_logout(self):
         mylogger.info("test for logout the user")
         with sync_playwright() as playwright:
-            store_page = open_login_page_and_submit(playwright, self.driver.url, self.driver.register_user["email"], self.driver.register_user["password"])
+            store_page = self.open_login_page_and_submit(playwright, self.driver.register_user["email"], self.driver.register_user["password"])
             store_page.page.on('dialog', lambda dialog: message_after_purchase(dialog, "Must be signed in to purchase"))
             store_page.click_logout_button()
             books = store_page.books_of_the_store()
@@ -288,7 +269,7 @@ class Tests(unittest.TestCase):
     def test_link_to_author_page(self):
         mylogger.info("test for enter to some author page from store page")
         with sync_playwright() as playwright:
-            main_page = enter_main_page(playwright, self.driver.url)
+            main_page = self.enter_main_page(playwright)
             authors_page = enter_authors_page(main_page)
             authors = authors_page.authors_of_the_store()
             author = random.randint(0, authors.count()-1)
@@ -299,7 +280,7 @@ class Tests(unittest.TestCase):
     def test_books_of_author_in_author_page(self):
         mylogger.info("test for book in some author page")
         with sync_playwright() as playwright:
-            main_page = enter_main_page(playwright, self.driver.url)
+            main_page = self.enter_main_page(playwright)
             authors_page = enter_authors_page(main_page)
             authors = authors_page.authors_of_the_store()
             author = random.randint(0, authors.count()-1)
@@ -312,7 +293,7 @@ class Tests(unittest.TestCase):
     def test_valid_amount_author_books(self):
         mylogger.info("test for valid amount of books in some author page")
         with sync_playwright() as playwright:
-            main_page = enter_main_page(playwright, self.driver.url)
+            main_page = self.enter_main_page(playwright)
             authors_page = enter_authors_page(main_page)
             authors = authors_page.authors_of_the_store()
             author = random.randint(0, authors.count() - 1)
@@ -326,7 +307,7 @@ class Tests(unittest.TestCase):
     def test_empty_search_input(self):
         mylogger.info("test for search with empty search input")
         with sync_playwright() as playwright:
-            main_page = enter_main_page(playwright, self.driver.url)
+            main_page = self.enter_main_page(playwright)
             search_page = enter_search_page(main_page, "")
             search_page.page.wait_for_selector('.card-group')
             search_results = search_page.search_results()
@@ -337,7 +318,7 @@ class Tests(unittest.TestCase):
     def test_book_search(self):
         mylogger.info("test for search for some book")
         with sync_playwright() as playwright:
-            main_page = enter_main_page(playwright, self.driver.url)
+            main_page = self.enter_main_page(playwright)
             store_page = enter_store_page(main_page)
             books = store_page.books_of_the_store()
             book = random.randint(0, books.count()-1)
@@ -352,7 +333,7 @@ class Tests(unittest.TestCase):
     def test_author_search(self):
         mylogger.info("test for search for some author")
         with sync_playwright() as playwright:
-            main_page = enter_main_page(playwright, self.driver.url)
+            main_page = self.enter_main_page(playwright)
             authors_page = enter_authors_page(main_page)
             authors = authors_page.authors_of_the_store().count()
             author = random.randint(0, authors - 1)
@@ -366,7 +347,7 @@ class Tests(unittest.TestCase):
     def test_fake_book_search(self):
         mylogger.info("test for search for some book that not exists in the system")
         with sync_playwright() as playwright:
-            main_page = enter_main_page(playwright, self.driver.url)
+            main_page = self.enter_main_page(playwright)
             store_page = StorePage(main_page.click_store_link())
             books = store_page.books_of_the_store()
             store_page.page.wait_for_selector('.book-container')
@@ -382,7 +363,7 @@ class Tests(unittest.TestCase):
     def test_fake_author_search(self):
         mylogger.info("test for search for some author that not exists in the system")
         with sync_playwright() as playwright:
-            main_page = enter_main_page(playwright, self.driver.url)
+            main_page = self.enter_main_page(playwright)
             authors_page = enter_authors_page(main_page)
             authors = authors_page.authors_of_the_store()
             authors_page.page.wait_for_selector('.author-container')
@@ -398,3 +379,4 @@ class Tests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
